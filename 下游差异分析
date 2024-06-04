@@ -2,6 +2,25 @@
 raw_dat <- read.table("~/Desktop/usb/dat/high_altitude/HA2019/HA2019.sleuth.norm_tpm.csv", header = T, row.names = 1, sep = ",")
 genes <- data.frame(genes=rownames(raw_dat))
 
+####ID 转换， 以及去除重复基因
+dat <- read.csv("./le_mouse/hypoxia_zhang/gene.count.matrix.annot.csv")
+ids <- dat[,c(1,2)]
+rownames(dat) <- dat$gene_id
+colnames(dat)
+expr <- dat[,c(5:7,11,12, 8:10)]
+table(rownames(expr) %in% ids$gene_id)
+dim(expr)
+tmp <- by(expr,
+          ids$gene_name,
+          function(x)rownames(x)[which.max(rowMeans(x))])
+probes <- as.character(tmp)
+expr <- expr[rownames(expr) %in% probes,]
+dim(expr)
+ids <- ids[ids$gene_id %in% rownames(expr),]
+table(rownames(expr) == ids$gene_id)
+rownames(expr) <- ids$gene_name
+######
+
 dat_baseline <- raw_dat[,grep("^A", colnames(raw_dat))]
 dat_acute <- raw_dat[,grep("^B", colnames(raw_dat))]
 dat_chronic <- raw_dat[,grep("^C", colnames(raw_dat))]
