@@ -1,0 +1,238 @@
+###Differentiation expression
+raw_dat <- read.table("~/Desktop/usb/dat/high_altitude/HA2019/HA2019.sleuth.norm_tpm.csv", header = T, row.names = 1, sep = ",")
+genes <- data.frame(genes=rownames(raw_dat))
+
+dat_baseline <- raw_dat[,grep("^A", colnames(raw_dat))]
+dat_acute <- raw_dat[,grep("^B", colnames(raw_dat))]
+dat_chronic <- raw_dat[,grep("^C", colnames(raw_dat))]
+
+base_people <- gsub("^A","",colnames(dat_baseline))
+acute_people <- gsub("^B","",colnames(dat_acute))
+chronic_people <- gsub("^C","", colnames(dat_chronic))
+
+base_acute <- intersect(base_people, acute_people)
+length(base_acute) ###161
+base_chronic <- intersect(base_people, chronic_people)
+length(base_chronic) ###181
+base_acute_chronic <- Reduce(intersect, list(base_people, acute_people, chronic_people))
+length(base_acute_chronic) ###142
+
+
+###base_vs_acute same people
+exp_base <- dat_baseline[,paste0("A",base_acute)]
+exp_acute <- dat_acute[,paste0("B", base_acute)]
+
+exp <- cbind(exp_base, exp_acute)
+library(DESeq2)
+condition <- factor(c(rep("baseline",161),
+                      rep("acute",161)),
+                    levels = c("baseline","acute"))
+coldata <- data.frame(row.names = colnames(exp), condition)
+coldata
+
+dds <- DESeqDataSetFromMatrix(round(exp), coldata, design = ~condition)
+dds <- dds[rowMeans(counts(dds))>1,]
+dds <- DESeq(dds)
+
+res <- results(dds, contrast = c("condition","acute","baseline"))
+res <- res[order(res$padj),]
+head(res)
+summary(res)
+
+table(res$padj < 0.05)
+res <- data.frame(res)
+res$logFDR <- -log10(res$padj)
+
+p_cutoff <- 0.05
+fc_cutoff <- 1
+
+res$expression <- ifelse(res$log2FoldChange >= fc_cutoff & res$padj <= p_cutoff, "Up-regulated",
+                         ifelse(res$log2FoldChange <= -fc_cutoff & res$padj <= p_cutoff, "Down-regulated",
+                                "Unchanged"))
+res$expression <- factor(res$expression, levels = c("Up-regulated","Unchanged","Down-regulated"))
+table(res$expression)
+write.table(res, "./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.gene_expression.txt",
+            quote = F, sep = "\t")
+
+###volcano_plot
+table(is.na(res))
+res <- na.omit(res)
+library(ggplot2)
+pdf("./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.volcano_plot.pdf", width = 8, height = 5)
+g1 <- ggplot(res,aes(log2FoldChange,logFDR))+
+  theme_few()+
+  geom_point(size = 2,aes(color = expression))+
+  scale_color_manual(values = c("darkred","grey","darkblue"))+
+  scale_x_continuous(limits = c(-10,10))+
+  geom_hline(yintercept = -log10(0.05),linetype = 4)+
+  geom_vline(xintercept = c(-1,1),linetype = 4)+
+  labs(x = "log2(Fold Change)", y = "-log10(p.adj)")+
+  theme(plot.title = element_text(hjust = 0.5,size = 22, face = "bold"),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.position = c(.8,.6),
+        plot.margin = margin(0.5, 2.5, 0.5, 2.5, unit = "cm"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour = "black", fill = NA),
+        axis.title = element_text(size = 24, face = 'bold'),
+        axis.text = element_text(size = 18, face = 'bold'))
+print(g1)
+dev.off()
+###差异柱状图
+num <- data.frame(table(res$expression))
+num <- num[c(1,3),]
+colnames(num) <- c("type","number")
+library(ggplot2)
+pdf("./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.bar_plot.pdf", width = 8, height = 5)
+p <- ggplot(num, aes(x=type,y=number, fill=type))+
+  theme_bw()+
+  geom_bar(stat = "identity")+
+  scale_fill_manual(values = c("darkred","darkblue"))+
+  scale_y_continuous(expand=c(0,0), limits = c(0,400))+
+  geom_text(aes(x=type,y=number, label=number),vjust= -0.5, size = 6)+
+  labs(x="", y="Numbers of Genes")+
+  theme(plot.title = element_text(hjust = 0.5,
+                                  size = 15, face = "bold"),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.position = c(0.8,0.8),
+        plot.margin = margin(0.5, 2.5, 0.5, 2.5, unit = "cm"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour = "black", fill = NA),
+        axis.title = element_text(size = 18, face = 'bold'),
+        axis.text = element_text(size = 16, face = 'bold'))
+print(p)
+dev.off()
+
+###热图
+#heatmap
+# heatmap
+diff_gene <- subset(res, res$padj <= 0.05 & abs(res$log2FoldChange) >= 1)
+library(pheatmap)
+table(diff_gene$expression)
+table(rownames(diff_gene) %in% rownames(exp))
+heat_mat_dat <- exp[rownames(diff_gene),]
+heat_mat_dat <- log2(heat_mat_dat + 1)
+annotation_col <- data.frame(type = (c(rep("Baseline", ncol(exp_base)), rep("Acute", ncol(exp_acute)))))
+annotation_col$type <- factor(annotation_col$type, levels = c("Baseline", "Acute"))
+rownames(annotation_col) <- colnames(heat_mat_dat)
+pdf("./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.heatmap_plot.pdf", width = 8, height = 8)
+p <- pheatmap(heat_mat_dat,
+         scale = "row",
+         cluster_cols = F,
+         cluster_rows = T,
+         angle_col = 45,
+         show_rownames = F,
+         show_colnames = F,
+         height = 10,
+         width = 15,
+         annotation_col = annotation_col)
+grid.draw(p)
+dev.off()
+
+#主成分分析(PCA)
+data_pca <- t(heat_mat_dat)
+data.pca <- prcomp(data_pca, scale. = T)
+group <- factor(c(rep("Baseline", ncol(exp_base)), rep("Acute", ncol(exp_acute))))
+library(scales)
+library(grid)
+library(ggbiplot)
+pdf("./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.pca_plot.pdf", width = 8, height = 8)
+p <- ggbiplot(data.pca, obs.scale = 1, var.scale = 1, groups = group, ellipse = T, var.axes = F)+
+  scale_color_brewer(palette = "Set1")+
+  theme(legend.direction = "horizontal", legend.position = "top")+
+  geom_vline(xintercept = c(0), linetype = 6, color = "black")+
+  geom_hline(yintercept = c(0), linetype = 6, color = "black")+
+  theme_bw()+
+  theme(panel.grid = element_line(colour = NA))
+grid.draw(p)
+dev.off()
+
+
+library(clusterProfiler)
+library(org.Hs.eg.db)
+###enrichment analysis
+up_gene <- rownames(diff_gene[which(diff_gene$expression == "Up-regulated"),])
+down_gene <- rownames(diff_gene[which(diff_gene$expression == "Down-regulated"),])
+ug <- bitr(up_gene, fromType = "SYMBOL",
+           toType = c("ENTREZID", "ENSEMBL"),
+           OrgDb = "org.Hs.eg.db")
+dg <- bitr(down_gene,fromType = "SYMBOL",
+           toType = c("ENTREZID","ENSEMBL"),
+           OrgDb = "org.Hs.eg.db")
+
+table(is.na(dg$ENTREZID))
+table(is.na(ug$ENTREZID))
+##kegg enrichment
+kegg_up <- enrichKEGG(ug$ENTREZID,
+                      organism = "hsa",
+                      keyType = "kegg",
+                      pvalueCutoff = 0.2,
+                      pAdjustMethod = "BH",
+                      qvalueCutoff = 0.2)
+pdf("./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.up_gene_kegg_enrichment.pdf", width = 10, height = 6)
+ss <- dotplot(kegg_up,showCategory = 10, label_format = 80, 
+              font.size = 10, title = " up_gene_KEGG_ENRICHMENT")
+print(ss)
+dev.off()
+
+kegg_up <- data.frame(kegg_up)
+write.csv(kegg_up, file = "./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.up_gene_kegg.csv", quote = F, row.names = F)
+
+kegg_down <- enrichKEGG(dg$ENTREZID,
+                        organism = "hsa",
+                        keyType = "kegg",
+                        pvalueCutoff = 0.05,
+                        pAdjustMethod = "BH",
+                        qvalueCutoff = 0.05)
+
+pdf("./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.down_gene_kegg_enrichment.pdf", width = 10, height = 6)
+ss <- dotplot(kegg_down,showCategory = 10, label_format = 80, 
+              font.size = 10, title = "down_gene_KEGG_ENRICHMENT")
+print(ss)
+dev.off()
+kegg_down <- data.frame(kegg_down)
+write.table(kegg_down, file = './plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.down_gene_kegg.csv', sep = "\t", quote = F, row.names = F)
+
+###GO enrichment
+go_up <- enrichGO(ug$ENTREZID,
+                  OrgDb = org.Hs.eg.db,
+                  ont = 'ALL',
+                  pAdjustMethod = "BH", 
+                  pvalueCutoff = 0.05,
+                  qvalueCutoff = 0.05,
+                  keyType = "ENTREZID",
+                  readable = T)
+
+pdf("./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.up_gene_GO_enrichment.pdf", width = 13, height = 9)
+s <- dotplot(go_up, split = 'ONTOLOGY', showCategory = 10, label_format = 80, 
+             font.size = 10, title = " up_gene_GO_ENRICHMENT")+
+  facet_grid(ONTOLOGY~., scale = 'free')
+print(s)
+dev.off()
+
+go_up <- data.frame(go_up)
+write.table(go_up, file = "./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.up_gene_GO.csv", sep = ",", quote = F, row.names = F)
+
+
+go_down <- enrichGO(dg$ENTREZID,
+                  OrgDb = org.Hs.eg.db,
+                  ont = 'ALL',
+                  pAdjustMethod = "BH", 
+                  pvalueCutoff = 0.05,
+                  qvalueCutoff = 0.05,
+                  keyType = "ENTREZID",
+                  readable = T)
+
+pdf("./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.down_gene_GO_enrichment.pdf", width = 13, height = 9)
+s <- dotplot(go_down, split = 'ONTOLOGY', showCategory = 10, label_format = 80, 
+             font.size = 10, title = " down_gene_GO_ENRICHMENT")+
+  facet_grid(ONTOLOGY~., scale = 'free')
+print(s)
+dev.off()
+
+go_down <- data.frame(go_down)
+table(go_down$ONTOLOGY)
+write.table(go_down, file = "./plot/transcriptome/HA2019/same_people_acute_vs_baseline_161_people.down_gene_GO.csv", sep = ",", quote = F, row.names = F)
