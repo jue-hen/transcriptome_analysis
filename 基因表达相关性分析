@@ -1,0 +1,42 @@
+dim(exp)
+autophagy_gene <- c("DNM1L","PRKN","PINK1","ATG7","BECN1","MAP1LC3B","MFF")
+tumor_gene <- c("VEGFA","MMP2","MMP9","VIM","CDH2","ZEB1","CD44")
+
+table(autophagy_gene %in% colnames(exp))
+table(tumor_gene %in% colnames(exp))
+library(ggthemes)
+library(ggplot2)
+library(ggthemes)
+library(ggpubr)
+library(ggpmisc)
+library(patchwork)
+
+for (i in autophagy_gene){
+  result_name=paste0("./WY/2024.8.30_plot/autophagy_gene/","RAB32_",i,"_correlation",".pdf")
+  pdf(result_name, width = 12, height = 8)
+  
+  #i="DNM1L"
+  tmp=exp[,i]
+  p1 <- ggplot(exp,aes(RAB32,tmp))+
+    theme_few()+
+    geom_smooth(method = "lm",se=FALSE, color="darkred", formula = y~x)+
+    #stat_cor(method = "pearson", label.x = 3, label.y = 6, size=8)+
+    geom_point(size=4,color="#4DBBD5FF")+
+    stat_poly_eq(formula = y~x,
+                 aes(label=paste(..eq.label..,
+                                 ..rr.label..,
+                                 ..p.value.label..,
+                                 sep = "~~~~~~")),
+                 parse = TRUE,size=6)+
+        labs(x=expression(paste(bold("log"[2]),bold(" ("),bolditalic("RAB32"),"  ",bold("mRNA expression level)"))),
+         y=substitute(paste(bold("log"[2]),bold(" ("),bolditalic(i),"  ",bold("mRNA expression level)")), list(i=i)))+
+    theme(plot.title = element_text(hjust = 0.5,size = 18, face = "bold"),
+          axis.title=element_text(size = 18, face = "bold"),
+          axis.text = element_text(size = 16, face = "bold"),
+          plot.margin = margin(1, 1, 1, 1, unit = "cm"),
+          legend.position = "NA"
+    )+
+    ggtitle(substitute(paste(bold("RAB32"),bold(" vs "),bolditalic(i)), list(i=i)))
+  print(p1)
+  dev.off()
+}
