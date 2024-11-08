@@ -1,0 +1,51 @@
+#PPI
+library(STRINGdb)
+library(igraph)
+dff_gene <- read.csv("le_mouse/hypoxia_zhang/diff_gene.csv", header = T, row.names = 1)
+dat <- dff_gene[,c(2,5,6)]
+colnames(dat) <- c("log2FC","pvalue","padj")
+dat$gene <- rownames(dat)
+string_db <- STRINGdb$new(version = "11.5",
+                          species = 10090, #人9606 #小鼠10090
+                          score_threshold = 700,
+                          input_directory = "")
+dat_map <- string_db$map(my_data_frame = dat,
+                         my_data_frame_id_col_names = "gene",
+                         removeUnmappedRows = TRUE)
+hits <- dat_map$STRING_id
+
+png("./le_mouse/hypoxia_zhang/string_PPI.png", units = "in", width = 10, height = 10, res = 400)
+string_db$plot_network(hits)
+dev.off()
+
+#添加上下调信息
+dat_map_color <- string_db$add_diff_exp_color(subset(dat_map, pvalue < 0.05),
+                                              logFcColStr = "log2FC")
+payload_id <- string_db$post_payload(dat_map_color$STRING_id,
+                                     colors = dat_map_color$color)
+png("./le_mouse/hypoxia_zhang/string_PPI_halo.png", units = "in", width = 10, height = 10, res = 400)
+string_db$plot_network(hits, payload_id = payload_id)
+dev.off()
+
+#clustering分簇
+clusterslist <- string_db$get_clusters(string_ids = hits,
+                                       algorithm = "fastgreedy")
+png("./le_mouse/hypoxia_zhang/string_PPI_iGraph_cluster.png", units = "in", width = 15, height = 10, res = 400)
+par(mfrow=c(2,3))
+for (i in 1:6) {
+  string_db$plot_network(clusterslist[[i]])
+}
+dev.off()
+
+#富集分析
+enrichment <- string_db$get_enrichment(string_ids = hits,
+                                       category = "all")
+#参数category指定要使用的数据库（默认为All），其中Process, Component, Function分别对应GO的BP,CC,MF三个子集
+write.csv(enrichment, "./le_mouse/hypoxia_zhang/PPI/enrichment_GO_all.csv ")
+#获取蛋白互作信息
+dat_link <- string_db$get_interactions(hits)
+dat_link$from <- dat_map[match(dat_link$from, dat_map$STRING_id),'gene']
+dat_link$to <- dat_map[match(dat_link$to, dat_map$STRING_id), 'gene']
+colnames(dat_link) <- c('node1', 'node2', 'combined_score')
+dat_link <- dat_link %>% distinct(node1,node2, .keep_all = T)
+write.csv(dat_link,"./le_mouse/hypoxia_zhang/PPI/string_link.csv", row.names = F, quote = F)
