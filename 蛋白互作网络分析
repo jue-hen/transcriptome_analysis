@@ -49,3 +49,45 @@ dat_link$to <- dat_map[match(dat_link$to, dat_map$STRING_id), 'gene']
 colnames(dat_link) <- c('node1', 'node2', 'combined_score')
 dat_link <- dat_link %>% distinct(node1,node2, .keep_all = T)
 write.csv(dat_link,"./le_mouse/hypoxia_zhang/PPI/string_link.csv", row.names = F, quote = F)
+
+
+
+#######new plot only with gene symbol
+##PPI
+library(STRINGdb)
+library(igraph)
+library(ggraph)
+# 创建STRINGdb对象
+string_db <- STRINGdb$new( version="12.0", species=9606,
+                           score_threshold=400, input_directory="")
+data_mapped <- genes %>% string_db$map(my_data_frame_id_col_names = "ENTREZID", 
+                                      removeUnmappedRows = TRUE)
+string_db$plot_network( data_mapped$STRING_id )
+data_links <- data_mapped$STRING_id[1:100] %>% string_db$get_interactions()
+
+# 转换stringID为Symbol，只取前两列和最后一列
+links <- data_links %>%
+  mutate(from = data_mapped[match(from, data_mapped$STRING_id), "SYMBOL"]) %>% 
+  mutate(to = data_mapped[match(to, data_mapped$STRING_id), "SYMBOL"]) %>%  
+  dplyr::select(from, to , last_col()) %>% 
+  dplyr::rename(weight = combined_score)
+# 节点数据
+nodes <- links %>% { data.frame(gene = c(.$from, .$to)) } %>% distinct()
+# 创建网络图
+# 根据links和nodes创建
+net <- igraph::graph_from_data_frame(d=links,vertices=nodes,directed = F)
+# 添加一些参数信息用于后续绘图
+# V和E是igraph包的函数，分别用于修改网络图的节点（nodes）和连线(links)
+igraph::V(net)$deg <- igraph::degree(net) # 每个节点连接的节点数
+igraph::V(net)$size <- igraph::degree(net)/5 #
+igraph::E(net)$width <- igraph::E(net)$weight/10
+
+ggraph(net,layout = "kk")+
+  geom_edge_fan(aes(edge_width=width), color = "lightblue", show.legend = F)+
+  geom_node_point(aes(size=size), color="orange", alpha=0.7)+
+  geom_node_text(aes(filter=deg>5, label=name), size = 5, repel = T)+
+  scale_edge_width(range = c(0.2,1))+
+  scale_size_continuous(range = c(1,10) )+
+  guides(size=F)+
+  theme_graph()
+
