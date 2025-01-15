@@ -1,0 +1,38 @@
+library(KEGGREST)
+library(org.Hs.eg.db)
+library(tidyerse)
+
+gs <- keggGet('hsa04213')
+gs[[1]] ##查找所有基因
+genes <- unlist(lapply(gs[[1]]$GENE, function(x) strsplit(x,";")))
+genelist <- genes[1:length(genes)%%3 == 2]
+genelist <- data.frame(genelist)
+write.table(genelist, "hsa04066_hif_genelist.txt",
+            row.names = F, quote = F, sep = "\t")
+
+
+gs <- keggGet('hsa04211')
+gs[[1]] ##查找所有基因
+genes <- unlist(lapply(gs[[1]]$GENE, function(x) strsplit(x,";")))
+genelist_2 <- genes[1:length(genes)%%3 == 2]
+genelist_2 <- data.frame(genelist_2)
+
+gs <- keggGet('hsa04933')
+gs[[1]] ##查找所有基因
+genes <- unlist(lapply(gs[[1]]$GENE, function(x) strsplit(x,";")))
+genelist_3 <- genes[1:length(genes)%%3 == 2]
+genelist_3 <- data.frame(genelist_3)
+
+gs <- keggGet('hsa04218')
+gs[[1]] ##查找所有基因
+genes <- unlist(lapply(gs[[1]]$GENE, function(x) strsplit(x,";")))
+genelist_4 <- genes[1:length(genes)%%3 == 2]
+genelist_4 <- data.frame(genelist_4)
+
+gene_all <- unique(c(genelist$genelist, genelist_2$genelist_2, genelist_3$genelist_3, genelist_4$genelist_4))
+
+gene_all <- data.frame(genes=gene_all)
+write.table(gene_all, "D:/Users/nk/Desktop/aging_related_genes.KEGG.hsa04213.hsa04211.hsa04933.hsa04218.txt", row.names = F, quote = F, sep = "\t")
+
+
+
