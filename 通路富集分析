@@ -1,0 +1,30 @@
+library(clusterProfiler)
+gene <- inte_gene
+genes <- bitr(gene, fromType = "SYMBOL",
+              toType = c("ENTREZID","ENSEMBL"),
+              OrgDb = "org.Hs.eg.db")
+kegg <- enrichKEGG(genes$ENTREZID,
+                   organism = "hsa",
+                   keyType = "kegg",
+                   pvalueCutoff = 0.5,
+                   qvalueCutoff = 0.5)
+dotplot(kegg, showCategory=10,title="KEGG ENRICHMENT")
+pdf("./plot/gene_enrichment_analysis/intersect_gene.kegg_enrichment.pdf", width = 8, height = 10)
+dotplot(kegg, showCategory=10,title="KEGG ENRICHMENT")
+dev.off()
+write.table(kegg, "./plot/gene_enrichment_analysis/intersect_gene.kegg_enrichment.txt", quote = F, row.names = F, sep = "\t")
+
+
+go <- enrichGO(genes$ENTREZID,
+               OrgDb = org.Hs.eg.db,
+               ont = "BP",
+               pAdjustMethod = "BH",
+               pvalueCutoff = 0.5,
+               qvalueCutoff = 0.5,
+               keyType = "ENTREZID",
+               readable = T)
+barplot(go, showCategory=10, label_format=40, title="GO-BP ENRICHMENT")
+pdf("./plot/gene_enrichment_analysis/intersect_gene.GO-BP_enrichment.pdf", width = 8, height = 10)
+barplot(go, showCategory=10,title="GO-BP ENRICHMENT")
+dev.off()
+write.table(go, "./plot/gene_enrichment_analysis/intersect_gene.GO-BP_enrichment.txt", quote = F, row.names = F, sep = "\t")
